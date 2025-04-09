@@ -2,7 +2,7 @@
 
 use optik::{Robot, SolverConfig};
 
-use nalgebra::{Isometry, Isometry3, Matrix4, Translation3, UnitQuaternion, Quaternion};
+use nalgebra::{Isometry3, Matrix4, Translation3, UnitQuaternion, Quaternion};
 use pyo3::prelude::*;
 
 fn parse_pose(v: Option<Vec<Vec<f64>>>) -> Isometry3<f64> {
