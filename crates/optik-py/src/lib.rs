@@ -20,7 +20,7 @@ fn pose_to_isometry(v: Option<Vec<f64>>) -> Isometry3<f64> {
     if let Some(v) = v {
         Isometry3::from_parts(
             Translation3::new(v[0], v[1], v[2]),
-            UnitQuaternion::from_quaternion(Quaternion::new( v[4], v[5], v[6], v[3])),
+            UnitQuaternion::from_quaternion(Quaternion::new(v[3], v[4], v[5], v[6])),
         )
     } else {
         Isometry3::identity()
