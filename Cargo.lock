@@ -363,6 +363,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mjcf"
+version = "0.0.0"
+source = "git+https://github.com/hashb/mjcf.git#c32453909450345046ff05dcb5a2e2697dc50843"
+dependencies = [
+ "quick-xml 0.31.0",
+ "serde",
+]
+
+[[package]]
 name = "nalgebra"
 version = "0.33.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -468,6 +477,7 @@ version = "0.5.0-beta.5+medra"
 dependencies = [
  "approx",
  "criterion",
+ "mjcf",
  "nalgebra",
  "nlopt",
  "ordered-float",
@@ -637,6 +647,16 @@ dependencies = [
  "pyo3-build-config",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1004a344b30a54e2ee58d66a71b32d2db2feb0a31f9a2d302bf0536f15de2a33"
+dependencies = [
+ "memchr",
+ "serde",
 ]
 
 [[package]]
@@ -912,7 +932,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "074515a3e6dc230bbbdcf35830fd71b67b55ae2ac22bc4ff69d89412fc84b830"
 dependencies = [
  "RustyXML",
- "quick-xml",
+ "quick-xml 0.36.2",
  "regex",
  "serde",
  "serde-xml-rs",
