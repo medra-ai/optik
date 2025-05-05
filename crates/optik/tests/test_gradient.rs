@@ -6,7 +6,16 @@ use optik::{
 };
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-const TEST_MODEL_STR: &str = include_str!("data/ur3e.urdf");
+const TEST_URDF_STR: &str = include_str!("data/ur3e.urdf");
+const TEST_MJCF_STR: &str = include_str!("data/ur3e.mjcf");
+
+fn create_robot_urdf() -> Robot {
+    Robot::from_urdf_str(TEST_URDF_STR, "ur_base_link", "ur_ee_link")
+}
+
+fn create_robot_mjcf() -> Robot {
+    Robot::from_mjcf_str(TEST_MJCF_STR, "ur_base_link", "ur_ee_link")
+}
 
 fn finite_difference<F>(f: F, x: &[f64]) -> DVector<f64>
 where
@@ -31,9 +40,8 @@ where
     DVector::from_row_slice(&g)
 }
 
-#[test]
-fn test_gradient_analytical_vs_numerical() {
-    let robot = Robot::from_urdf_str(TEST_MODEL_STR, "ur_base_link", "ur_ee_link");
+fn test_gradient_analytical_vs_numerical_impl(create_robot: fn() -> Robot) {
+    let robot = create_robot();
     let linear_weight = vector![0.0, 5.0, 0.25];
     let angular_weight = vector![0.005, 1.0, 0.99];
 
@@ -65,4 +73,14 @@ fn test_gradient_analytical_vs_numerical() {
 
         assert_abs_diff_eq!(g_a.as_slice(), g_n.as_slice(), epsilon = 1e-6);
     }
+}
+
+#[test]
+fn test_gradient_analytical_vs_numerical_urdf() {
+    test_gradient_analytical_vs_numerical_impl(create_robot_urdf);
+}
+
+#[test]
+fn test_gradient_analytical_vs_numerical_mjcf() {
+    test_gradient_analytical_vs_numerical_impl(create_robot_mjcf);
 }

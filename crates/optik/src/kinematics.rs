@@ -104,12 +104,85 @@ impl KinematicChain {
         chain
     }
 
-    pub fn from_mjcf(mjcf: &mjcf_rs::Model, base_link: &str, ee_link: &str) -> Self {
+    pub fn from_mjcf(mjcf: &mjcf::Mujoco, base_link: &str, ee_link: &str) -> Self {
         let graph = parse_mjcf(mjcf);
 
         assert!(!is_cyclic_directed(&graph), "robot model contains loops");
-        
-        
+
+        // Identify the links along the chain from base to EE.
+        let sorted_links = {
+            let base_link_ix = graph
+                .node_indices()
+                .find(|&ix| graph[ix].name == base_link)
+                .unwrap_or_else(|| panic!("base link '{}' does not exist", base_link));
+
+            let ee_link_ix = graph
+                .node_indices()
+                .find(|&ix| graph[ix].name == ee_link)
+                .unwrap_or_else(|| panic!("EE link '{}' does not exist", ee_link));
+
+            let (_dist, path) = petgraph::algo::astar(
+                &graph,
+                base_link_ix,
+                |ix| ix == ee_link_ix,
+                |_| 1.0,
+                |_| 0.0,
+            )
+            .expect("no path from base to EE link");
+
+            path
+        };
+
+        // Identify the serial chain of joints that connects the links of
+        // interest.
+        let joints = sorted_links.windows(2).map(|links| {
+            let joint = graph.find_edge(links[0], links[1]).unwrap();
+            graph[joint].clone()
+        });
+
+        // OPTIMIZATION: Fold fixed joints to avoid recomputing their constant
+        // offsets on every forward kinematic computation.
+        let (mut joints, tip_link_tfm) = joints.fold(
+            (vec![], Isometry3::identity()),
+            |(mut joints, collapsed_tfm), joint| {
+                match joint.typ {
+                    JointType::Fixed => {
+                        // Accumulate the transforms from successive fixed joints.
+                        (joints, joint.origin * collapsed_tfm)
+                    }
+                    _ => {
+                        // When we encounter an articulated joint, apply the
+                        // accumulated fixed joint transforms (if any) and then
+                        // reset the accumulation.
+                        let new_joint = Joint {
+                            origin: joint.origin * collapsed_tfm,
+                            ..joint
+                        };
+                        joints.push(new_joint);
+
+                        (joints, Isometry3::identity())
+                    }
+                }
+            },
+        );
+
+        // Handle the case when there is one or more fixed joints hanging off
+        // the articulated chain (e.g. a gripper frame).
+        if tip_link_tfm != Isometry3::identity() {
+            joints.push(Joint {
+                name: String::new(),
+                typ: JointType::Fixed,
+                limits: vec![],
+                origin: tip_link_tfm,
+            })
+        }
+
+        let chain = Self { joints };
+
+        // We don't care to support empty chains.
+        assert!(chain.num_positions() > 0, "kinematic chain is empty");
+
+        chain
     }
 
     /// Returns the size of the generalized position vector for this chain.
@@ -326,10 +399,117 @@ fn parse_urdf(urdf: &urdf_rs::Robot) -> DiGraph<Link, Joint> {
     graph
 }
 
-fn parse_mjcf(mjcf: &mjcf_rs::Model) -> DiGraph<Link, Joint> {
+fn parse_mjcf(mjcf: &mjcf::Mujoco) -> DiGraph<Link, Joint> {
     let mut graph = DiGraph::<Link, Joint>::new();
 
-    for link in &mjcf.body {
-        graph.add_node(Link { name: link.name.clone() });
+    // Recursively add bodies and joints
+    fn add_body_recursive(
+        graph: &mut DiGraph<Link, Joint>,
+        body: &mjcf::Body,
+        parent_name: Option<&str>,
+    ) {
+        // Add this body as a node
+        graph.add_node(Link {
+            name: body.name.clone(),
+        });
+
+        // If this body has a parent, add joints between parent and this body
+        if let Some(parent_name) = parent_name {
+            let parent_ix = graph
+                .node_indices()
+                .find(|&l| graph[l].name == parent_name)
+                .unwrap_or_else(|| panic!("parent body '{}' does not exist", parent_name));
+            let child_ix = graph
+                .node_indices()
+                .find(|&l| graph[l].name == body.name)
+                .unwrap_or_else(|| panic!("child body '{}' does not exist", body.name));
+
+            // Add joints between parent and this body
+            if body.joint.is_empty() {
+                // If no explicit joints, add a fixed joint based on the body's pos and quat
+                let pos = body.pos.unwrap_or([0.0, 0.0, 0.0]);
+                let quat = body.quat.unwrap_or([1.0, 0.0, 0.0, 0.0]);
+
+                // Create the transform from parent to child
+                let origin = Isometry3::from_parts(
+                    Translation3::from(Vector3::from_row_slice(&pos)),
+                    UnitQuaternion::from_quaternion(nalgebra::Quaternion::new(
+                        quat[0], quat[1], quat[2], quat[3],
+                    )),
+                );
+
+                graph.add_edge(
+                    parent_ix,
+                    child_ix,
+                    Joint {
+                        name: format!("{}_fixed", body.name),
+                        typ: JointType::Fixed,
+                        limits: vec![],
+                        origin,
+                    },
+                );
+            } else {
+                for joint in &body.joint {
+                    let joint_type = match joint.r#type.as_str() {
+                        "hinge" => JointType::Revolute(Unit::new_normalize(
+                            Vector3::from_row_slice(&joint.axis.unwrap_or([0.0, 0.0, 1.0])),
+                        )),
+                        "slide" => JointType::Prismatic(Unit::new_normalize(
+                            Vector3::from_row_slice(&joint.axis.unwrap_or([0.0, 0.0, 1.0])),
+                        )),
+                        "fixed" => JointType::Fixed,
+                        _ => panic!("joint type not supported: {}", joint.r#type),
+                    };
+
+                    let limits = if joint.limited == "true" {
+                        vec![(
+                            joint.range.unwrap_or([-f64::INFINITY, f64::INFINITY])[0],
+                            joint.range.unwrap_or([-f64::INFINITY, f64::INFINITY])[1],
+                        )]
+                    } else {
+                        // For non-fixed joints, use default limits of ±π
+                        match joint_type {
+                            JointType::Fixed => vec![],
+                            _ => vec![(-std::f64::consts::PI, std::f64::consts::PI)],
+                        }
+                    };
+
+                    // For joints, combine the body's transform with the joint's transform
+                    let pos = body.pos.unwrap_or([0.0, 0.0, 0.0]);
+                    let quat = body.quat.unwrap_or([1.0, 0.0, 0.0, 0.0]);
+                    let origin = Isometry3::from_parts(
+                        Translation3::from(Vector3::from_row_slice(&pos)),
+                        UnitQuaternion::from_quaternion(nalgebra::Quaternion::new(
+                            quat[0], quat[1], quat[2], quat[3],
+                        )),
+                    );
+
+                    graph.add_edge(
+                        parent_ix,
+                        child_ix,
+                        Joint {
+                            name: joint.name.clone(),
+                            typ: joint_type,
+                            limits,
+                            origin,
+                        },
+                    );
+                }
+            }
+        }
+
+        // Recursively process child bodies
+        for child in &body.body {
+            add_body_recursive(graph, child, Some(&body.name));
+        }
     }
+
+    // Start processing from the worldbody
+    if let Some(worldbody) = &mjcf.worldbody {
+        for body in &worldbody.body {
+            add_body_recursive(&mut graph, body, None);
+        }
+    }
+
+    graph
 }

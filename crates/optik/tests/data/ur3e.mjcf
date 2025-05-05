@@ -19,7 +19,7 @@
   </asset>
 
   <worldbody>
-    <body name="ur_base_link" pos="0.00000000 0.00000000 0.05800000" quat="1 0 0 0" childclass="robot">
+    <body name="ur_base_link" pos="0.0 0.0 0.0" quat="1 0 0 0" childclass="robot">
       <freejoint name="floating_base" />
       <body name="ur_shoulder_link" pos="0.0 0.0 0.152" quat="1.0 0.0 0.0 0.0">
         <joint name="ur_shoulder_pan_joint" type="hinge" ref="0.0" range="-3.141592653589793 3.141592653589793" axis="0 0 1" />
