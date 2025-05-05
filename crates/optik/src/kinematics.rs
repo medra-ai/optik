@@ -458,7 +458,10 @@ fn parse_mjcf(mjcf: &mjcf::Mujoco) -> DiGraph<Link, Joint> {
                             Vector3::from_row_slice(&joint.axis.unwrap_or([0.0, 0.0, 1.0])),
                         )),
                         "fixed" => JointType::Fixed,
-                        _ => panic!("joint type not supported: {}", joint.r#type),
+                        // default is hinge
+                        _ => JointType::Revolute(Unit::new_normalize(
+                            Vector3::from_row_slice(&joint.axis.unwrap_or([0.0, 0.0, 1.0])),
+                        )),
                     };
 
                     let limits = if joint.limited == "true" {
