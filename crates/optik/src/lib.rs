@@ -53,6 +53,21 @@ impl Robot {
         let urdf = urdf_rs::read_from_string(urdf).expect("error parsing URDF file!");
         Robot::from_urdf(&urdf, base_link, ee_link)
     }
+
+    pub fn from_mjcf(mjcf: &mjcf_rs::Model, base_link: &str, ee_link: &str) -> Self {
+        let chain = KinematicChain::from_mjcf(mjcf, base_link, ee_link);
+        Robot::new(chain)
+    }
+
+    pub fn from_mjcf_file(path: impl AsRef<Path>, base_link: &str, ee_link: &str) -> Self {
+        let mjcf = mjcf_rs::read_file(path).expect("error parsing MJCF file!");
+        Robot::from_mjcf(&mjcf, base_link, ee_link)
+    }
+
+    pub fn from_mjcf_str(mjcf: &str, base_link: &str, ee_link: &str) -> Self {
+        let mjcf = mjcf_rs::read_from_string(mjcf).expect("error parsing MJCF file!");
+        Robot::from_mjcf(&mjcf, base_link, ee_link)
+    }
 }
 
 impl Robot {

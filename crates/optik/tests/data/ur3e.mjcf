@@ -1,0 +1,81 @@
+<mujoco model="ur3e">
+  <default>
+    <default class="robot">
+      <default class="visual">
+        <geom material="visualgeom" contype="0" conaffinity="0" group="2" />
+      </default>
+      <default class="collision">
+        <geom condim="6" contype="0" conaffinity="1" group="3" solref="0.005 1" friction="0.8 0.02 0.01" />
+        <equality solimp="0.99 0.999 1e-05" solref="0.005 1" />
+      </default>
+    </default>
+  </default>
+
+  <compiler angle="radian" />
+
+  <asset>
+    <material name="LightGrey" rgba="0.7 0.7 0.7 1.0" />
+    <material name="default_material" rgba="0.7 0.7 0.7 1" />
+  </asset>
+
+  <worldbody>
+    <body name="ur_base_link" pos="0.00000000 0.00000000 0.05800000" quat="1 0 0 0" childclass="robot">
+      <freejoint name="floating_base" />
+      <body name="ur_shoulder_link" pos="0.0 0.0 0.152" quat="1.0 0.0 0.0 0.0">
+        <joint name="ur_shoulder_pan_joint" type="hinge" ref="0.0" range="-3.141592653589793 3.141592653589793" axis="0 0 1" />
+        <inertial pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" mass="2.0" diaginertia="0.008093163429399999 0.008093163429399999 0.005625" />
+        <body name="ur_upper_arm_link" pos="0.0 0.12 0.0" quat="0.7071067811865476 0.0 0.7071067811865475 0.0">
+          <joint name="ur_shoulder_lift_joint" type="hinge" ref="0.0" range="-3.141592653589793 3.141592653589793" axis="0 1 0" />
+          <inertial pos="0.0 0.0 0.122" quat="1.0 0.0 0.0 0.0" mass="3.42" diaginertia="0.021777126289145996 0.021777126289145996 0.00961875" />
+          <body name="ur_forearm_link" pos="0.0 -0.093 0.244" quat="1.0 0.0 0.0 0.0">
+            <joint name="ur_elbow_joint" type="hinge" ref="0.0" range="-3.141592653589793 3.141592653589793" axis="0 1 0" />
+            <inertial pos="0.0 0.0 0.1065" quat="1.0 0.0 0.0 0.0" mass="1.26" diaginertia="0.006535617385751999 0.006535617385751999 0.00354375" />
+            <body name="ur_wrist_1_link" pos="0.0 0.0 0.213" quat="0.7071067811865476 0.0 0.7071067811865475 0.0">
+              <joint name="ur_wrist_1_joint" type="hinge" ref="0.0" range="-3.141592653589793 3.141592653589793" axis="0 1 0" />
+              <inertial pos="0.0 0.104 0.0" quat="1.0 0.0 0.0 0.0" mass="0.8" diaginertia="0.002084999166 0.002084999166 0.00225" />
+              <body name="ur_wrist_2_link" pos="0.0 0.104 0.0" quat="1.0 0.0 0.0 0.0">
+                <joint name="ur_wrist_2_joint" type="hinge" ref="0.0" range="-3.141592653589793 3.141592653589793" axis="0 0 1" />
+                <inertial pos="0.0 0.0 0.085" quat="1.0 0.0 0.0 0.0" mass="0.8" diaginertia="0.002084999166 0.002084999166 0.00225" />
+                <body name="ur_wrist_3_link" pos="0.0 0.0 0.085" quat="1.0 0.0 0.0 0.0">
+                  <joint name="ur_wrist_3_joint" type="hinge" ref="0.0" range="-3.141592653589793 3.141592653589793" axis="0 1 0" />
+                  <inertial pos="0.0 0.071 0.0" quat="0.7071067811865476 0.7071067811865475 0.0 0.0" mass="0.35" diaginertia="0.00014104994358 0.00014104994358 0.0001792" />
+                  <body name="ur_ee_link" pos="0.0 0.092 0.0" quat="0.7071067811865476 0.0 0.0 0.7071067811865475" />
+                  <body name="ur_tool0" pos="0 0.092 0" quat="0.7071067811865476 -0.7071067811865475 0.0 0.0" />
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="ur_base" pos="0 0 0" quat="6.123233995736766e-17 0.0 0.0 -1.0" />
+      <site name="ur_base_link_site" pos="0 0 0" quat="1 0 0 0" />
+      <camera name="front_camera" mode="track" fovy="90.0" quat="4.329780281177467e-17 4.329780281177466e-17 0.7071067811865475 0.7071067811865476" pos="0.0 2.0 0.5" />
+      <camera name="side_camera" mode="track" fovy="90.0" quat="-0.5 -0.4999999999999999 0.5 0.5000000000000001" pos="-2.0 0.0 0.5" />
+    </body>
+  </worldbody>
+
+  <actuator>
+    <motor name="ur_shoulder_pan_joint_ctrl" joint="ur_shoulder_pan_joint" />
+    <motor name="ur_shoulder_lift_joint_ctrl" joint="ur_shoulder_lift_joint" />
+    <motor name="ur_elbow_joint_ctrl" joint="ur_elbow_joint" />
+    <motor name="ur_wrist_1_joint_ctrl" joint="ur_wrist_1_joint" />
+    <motor name="ur_wrist_2_joint_ctrl" joint="ur_wrist_2_joint" />
+    <motor name="ur_wrist_3_joint_ctrl" joint="ur_wrist_3_joint" />
+  </actuator>
+
+  <contact>
+    <exclude body1="ur_base_link" body2="ur_shoulder_link" />
+    <exclude body1="ur_shoulder_link" body2="ur_upper_arm_link" />
+    <exclude body1="ur_upper_arm_link" body2="ur_forearm_link" />
+    <exclude body1="ur_forearm_link" body2="ur_wrist_1_link" />
+    <exclude body1="ur_wrist_1_link" body2="ur_wrist_2_link" />
+    <exclude body1="ur_wrist_2_link" body2="ur_wrist_3_link" />
+  </contact>
+
+  <sensor>
+    <framepos name="base_link_pos" objtype="site" objname="ur_base_link_site" />
+    <framequat name="base_link_quat" objtype="site" objname="ur_base_link_site" />
+    <framelinvel name="base_link_vel" objtype="site" objname="ur_base_link_site" />
+    <frameangvel name="base_link_ang_vel" objtype="site" objname="ur_base_link_site" />
+  </sensor>
+</mujoco>

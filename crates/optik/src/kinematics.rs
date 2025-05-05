@@ -104,6 +104,14 @@ impl KinematicChain {
         chain
     }
 
+    pub fn from_mjcf(mjcf: &mjcf_rs::Model, base_link: &str, ee_link: &str) -> Self {
+        let graph = parse_mjcf(mjcf);
+
+        assert!(!is_cyclic_directed(&graph), "robot model contains loops");
+        
+        
+    }
+
     /// Returns the size of the generalized position vector for this chain.
     pub fn num_positions(&self) -> usize {
         self.joints.iter().map(|j| j.typ.nq()).sum()
@@ -316,4 +324,12 @@ fn parse_urdf(urdf: &urdf_rs::Robot) -> DiGraph<Link, Joint> {
     }
 
     graph
+}
+
+fn parse_mjcf(mjcf: &mjcf_rs::Model) -> DiGraph<Link, Joint> {
+    let mut graph = DiGraph::<Link, Joint>::new();
+
+    for link in &mjcf.body {
+        graph.add_node(Link { name: link.name.clone() });
+    }
 }
