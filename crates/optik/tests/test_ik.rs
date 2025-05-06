@@ -5,12 +5,19 @@ use nalgebra::{DVector, Isometry3, Vector6};
 use optik::{Robot, SolutionMode, SolverConfig};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-const TEST_MODEL_STR: &str = include_str!("data/ur3e.urdf");
+const TEST_URDF_STR: &str = include_str!("data/ur3e.urdf");
+const TEST_MJCF_STR: &str = include_str!("data/ur3e.mjcf");
 
-#[test]
-#[should_panic(expected = "joint limits")]
-fn test_invalid_seed() {
-    let robot = Robot::from_urdf_str(TEST_MODEL_STR, "ur_base_link", "ur_ee_link");
+fn create_robot_urdf() -> Robot {
+    Robot::from_urdf_str(TEST_URDF_STR, "ur_base_link", "ur_ee_link")
+}
+
+fn create_robot_mjcf() -> Robot {
+    Robot::from_mjcf_str(TEST_MJCF_STR, "ur_base_link", "ur_ee_link")
+}
+
+fn test_invalid_seed_impl(create_robot: fn() -> Robot) {
+    let robot = create_robot();
     let config = SolverConfig::default();
     let tfm_target = Isometry3::identity();
 
@@ -21,11 +28,10 @@ fn test_invalid_seed() {
     robot.ik(&config, &tfm_target, x0, &Isometry3::identity());
 }
 
-#[test]
-fn test_stopping_maxtime() {
+fn test_stopping_maxtime_impl(create_robot: fn() -> Robot) {
     const MAX_TIME: f64 = 0.05;
 
-    let robot = Robot::from_urdf_str(TEST_MODEL_STR, "ur_base_link", "ur_ee_link");
+    let robot = create_robot();
     let tfm_target = Isometry3::translation(100.0, 100.0, 100.0); // impossible goal
     let x0 = vec![0.0; 6];
 
@@ -42,9 +48,8 @@ fn test_stopping_maxtime() {
     assert_abs_diff_eq!(duration.as_secs_f64(), MAX_TIME, epsilon = 1e-1);
 }
 
-#[test]
-fn test_determinism() {
-    let mut robot = Robot::from_urdf_str(TEST_MODEL_STR, "ur_base_link", "ur_ee_link");
+fn test_determinism_impl(create_robot: fn() -> Robot) {
+    let mut robot = create_robot();
     robot.set_parallelism(1);
 
     let mut rng = StdRng::seed_from_u64(42);
@@ -88,9 +93,8 @@ fn test_determinism() {
     }
 }
 
-#[test]
-fn test_solution_forward_backward() {
-    let robot = Robot::from_urdf_str(TEST_MODEL_STR, "ur_base_link", "ur_ee_link");
+fn test_solution_forward_backward_impl(create_robot: fn() -> Robot) {
+    let robot = create_robot();
 
     let mut rng = StdRng::seed_from_u64(42);
 
@@ -129,9 +133,8 @@ fn test_solution_forward_backward() {
     }
 }
 
-#[test]
-fn test_solution_quality() {
-    let robot = Robot::from_urdf_str(TEST_MODEL_STR, "ur_base_link", "ur_ee_link");
+fn test_solution_quality_impl(create_robot: fn() -> Robot) {
+    let robot = create_robot();
 
     let mut rng = StdRng::seed_from_u64(42);
 
@@ -179,4 +182,56 @@ fn test_solution_quality() {
         let x0 = DVector::from_row_slice(x0.as_slice());
         assert!(sol_quality.metric_distance(&x0) <= sol_speed.metric_distance(&x0));
     }
+}
+
+#[test]
+#[should_panic(expected = "joint limits")]
+fn test_invalid_seed_urdf() {
+    test_invalid_seed_impl(create_robot_urdf);
+}
+
+#[test]
+#[should_panic(expected = "joint limits")]
+fn test_invalid_seed_mjcf() {
+    test_invalid_seed_impl(create_robot_mjcf);
+}
+
+#[test]
+fn test_stopping_maxtime_urdf() {
+    test_stopping_maxtime_impl(create_robot_urdf);
+}
+
+#[test]
+fn test_stopping_maxtime_mjcf() {
+    test_stopping_maxtime_impl(create_robot_mjcf);
+}
+
+#[test]
+fn test_determinism_urdf() {
+    test_determinism_impl(create_robot_urdf);
+}
+
+#[test]
+fn test_determinism_mjcf() {
+    test_determinism_impl(create_robot_mjcf);
+}
+
+#[test]
+fn test_solution_forward_backward_urdf() {
+    test_solution_forward_backward_impl(create_robot_urdf);
+}
+
+#[test]
+fn test_solution_forward_backward_mjcf() {
+    test_solution_forward_backward_impl(create_robot_mjcf);
+}
+
+#[test]
+fn test_solution_quality_urdf() {
+    test_solution_quality_impl(create_robot_urdf);
+}
+
+#[test]
+fn test_solution_quality_mjcf() {
+    test_solution_quality_impl(create_robot_mjcf);
 }

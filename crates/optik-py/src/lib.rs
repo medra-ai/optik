@@ -83,6 +83,11 @@ impl PyRobot {
         PyRobot(Robot::from_urdf_file(path, base_link, ee_link))
     }
 
+    #[staticmethod]
+    fn from_mjcf_file(path: &str, base_link: &str, ee_link: &str) -> PyRobot {
+        PyRobot(Robot::from_mjcf_file(path, base_link, ee_link))
+    }
+
     pub fn set_parallelism(&mut self, n: usize) {
         self.0.set_parallelism(n);
     }
