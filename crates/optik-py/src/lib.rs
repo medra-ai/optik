@@ -2,13 +2,26 @@
 
 use optik::{Robot, SolverConfig};
 
-use nalgebra::{Isometry3, Matrix4, Translation3, UnitQuaternion, Quaternion};
+use nalgebra::{Isometry3, Matrix4, Matrix3, Translation3, UnitQuaternion, Quaternion};
 use pyo3::prelude::*;
 
 fn parse_pose(v: Option<Vec<Vec<f64>>>) -> Isometry3<f64> {
     if let Some(v) = v {
-        let m = Matrix4::from_iterator(v.into_iter().flatten()).transpose();
-        nalgebra::try_convert(m).expect("invalid target transform specified")
+        let mut matrix = Matrix4::from_iterator(v.into_iter().flatten()).transpose();
+        let isometry_opt: Option<Isometry3<f64>> = nalgebra::try_convert(matrix);
+        match isometry_opt {
+            Some(isometry) =>{
+                return isometry
+            }
+            None => {
+                // Use singular value decomposition to normalize the rotation part of the matrix
+                let rotatrion_matrix : Matrix3<f64> = matrix.fixed_view::<3,3>(0,0).into();
+                let svd = rotatrion_matrix.svd(true, true);
+                let normalized_rotation_matrix = svd.u.unwrap() * svd.v_t.unwrap();
+                matrix.fixed_view_mut::<3, 3>(0, 0).copy_from(&normalized_rotation_matrix);
+                return nalgebra::try_convert(matrix).expect("invalid target transform specified")
+            }
+        }
     } else {
         Isometry3::identity()
     }
