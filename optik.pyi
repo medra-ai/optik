@@ -30,10 +30,13 @@ class Robot:
         x: VectorXd,
         ee_offset: MatrixXd | None = ...,
     ) -> list[list[float]]: ...
-    def fk(
+    def fk_hom2hom(
         self, x: VectorXd, ee_offset: MatrixXd | None = ...
     ) -> list[list[float]]: ...
-    def fk_medra(
+    def fk_pq2hom(
+        self, x: VectorXd, ee_offset: VectorXd | None = ...
+    ) -> list[list[float]]: ...
+    def fk_pq2pq(
         self, x: VectorXd, ee_offset: VectorXd | None = ...
     ) -> list[float]: ...
     def ik(
@@ -50,3 +53,13 @@ class Robot:
         x0: VectorXd,
         ee_offset_pose: VectorXd | None = ...,
     ) -> tuple[list[float], float] | None: ...
+
+    def apply_angle_between_two_vectors_constraint(
+        self,
+        source_vec_in_tip_frame: VectorXd,
+        target_vec: VectorXd,
+        max_angle: float,
+        ee_offset_pose: VectorXd,
+        seed_joint_angles: VectorXd,
+        config: SolverConfig,
+    ) -> list[float] | None: ...

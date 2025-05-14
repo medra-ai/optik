@@ -2,13 +2,28 @@
 
 use optik::{Robot, SolverConfig};
 
-use nalgebra::{Isometry3, Matrix4, Translation3, UnitQuaternion, Quaternion};
+use nalgebra::{
+    Isometry3, Matrix3, Matrix4, Quaternion, Translation3, UnitQuaternion, UnitVector3, Vector3,
+};
 use pyo3::prelude::*;
 
 fn parse_pose(v: Option<Vec<Vec<f64>>>) -> Isometry3<f64> {
     if let Some(v) = v {
-        let m = Matrix4::from_iterator(v.into_iter().flatten()).transpose();
-        nalgebra::try_convert(m).expect("invalid target transform specified")
+        let mut matrix = Matrix4::from_iterator(v.into_iter().flatten()).transpose();
+        let isometry_opt: Option<Isometry3<f64>> = nalgebra::try_convert(matrix);
+        match isometry_opt {
+            Some(isometry) => return isometry,
+            None => {
+                // Use singular value decomposition to normalize the rotation part of the matrix
+                let rotatrion_matrix: Matrix3<f64> = matrix.fixed_view::<3, 3>(0, 0).into();
+                let svd = rotatrion_matrix.svd(true, true);
+                let normalized_rotation_matrix = svd.u.unwrap() * svd.v_t.unwrap();
+                matrix
+                    .fixed_view_mut::<3, 3>(0, 0)
+                    .copy_from(&normalized_rotation_matrix);
+                return nalgebra::try_convert(matrix).expect("invalid target transform specified");
+            }
+        }
     } else {
         Isometry3::identity()
     }
@@ -114,7 +129,9 @@ impl PyRobot {
     }
 
     #[pyo3(signature=(x, ee_offset=None))]
-    fn fk(&self, x: Vec<f64>, ee_offset: Option<Vec<Vec<f64>>>) -> Vec<Vec<f64>> {
+    fn fk_hom2hom(&self, x: Vec<f64>, ee_offset: Option<Vec<Vec<f64>>>) -> Vec<Vec<f64>> {
+        // Evaluate forward kinematics. ee_offset and return type are
+        //   homogeneous transform matrix [4x4].
         let robot = &self.0;
 
         assert_eq!(x.len(), robot.num_positions(), "len(x0) != num_positions");
@@ -127,9 +144,26 @@ impl PyRobot {
             .collect()
     }
 
+    #[pyo3(signature=(x, ee_offset=None))]
+    fn fk_pq2hom(&self, x: Vec<f64>, ee_offset: Option<Vec<f64>>) -> Vec<Vec<f64>> {
+        // Evaluate forward kinematics. ee_offset and return type are
+        //   homogeneous transform matrix [4x4].
+        let robot = &self.0;
+
+        assert_eq!(x.len(), robot.num_positions(), "len(x0) != num_positions");
+
+        let ee_pose = robot.fk(&x, &pose_to_isometry(ee_offset)).ee_tfm();
+        ee_pose
+            .to_matrix()
+            .row_iter()
+            .map(|row| row.iter().copied().collect())
+            .collect()
+    }
 
     #[pyo3(signature=(x, ee_offset=None))]
-    fn fk_medra(&self, x: Vec<f64>, ee_offset: Option<Vec<f64>>) -> Vec<f64> {
+    fn fk_pq2pq(&self, x: Vec<f64>, ee_offset: Option<Vec<f64>>) -> Vec<f64> {
+        // Evaluate forward kinematics. ee_offset and return type are
+        //   pose + quaternion vector [px, py, pz, qw, qx, qy, qz].
         let robot = &self.0;
 
         assert_eq!(x.len(), robot.num_positions(), "len(x0) != num_positions");
@@ -150,7 +184,6 @@ impl PyRobot {
             quat.k,
         ]
     }
-
 
     #[pyo3(signature=(config, target, x0, ee_offset=None))]
     fn ik(
@@ -184,6 +217,31 @@ impl PyRobot {
         let target = pose_to_isometry(Some(target_pose));
         let ee_offset = pose_to_isometry(ee_offset_pose);
         robot.ik(&config.0, &target, x0, &ee_offset)
+    }
+
+    #[pyo3(signature=(source_vec_in_tip_frame, target_vec, max_angle, ee_offset_pose, seed_joint_angles, config))]
+    fn apply_angle_between_two_vectors_constraint(
+        &self,
+        source_vec_in_tip_frame: Vec<f64>,
+        target_vec: Vec<f64>,
+        max_angle: f64,
+        ee_offset_pose: Vec<f64>,
+        seed_joint_angles: Vec<f64>,
+        config: &PySolverConfig,
+    ) -> Option<Vec<f64>> {
+        let source_vector_tip_frame: UnitVector3<f64> =
+            UnitVector3::new_normalize(Vector3::from_column_slice(&source_vec_in_tip_frame));
+        let target_vector: UnitVector3<f64> =
+            UnitVector3::new_normalize(Vector3::from_column_slice(&target_vec));
+        let ee_transform: Isometry3<f64> = pose_to_isometry(Some(ee_offset_pose));
+        return self.0.apply_angle_between_two_vectors_constraint(
+            source_vector_tip_frame,
+            target_vector,
+            max_angle,
+            ee_transform,
+            seed_joint_angles,
+            &config.0,
+        );
     }
 }
 
