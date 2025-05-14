@@ -129,9 +129,7 @@ impl PyRobot {
     }
 
     #[pyo3(signature=(x, ee_offset=None))]
-    fn fk_hom2hom(&self, x: Vec<f64>, ee_offset: Option<Vec<Vec<f64>>>) -> Vec<Vec<f64>> {
-        // Evaluate forward kinematics. ee_offset and return type are
-        //   homogeneous transform matrix [4x4].
+    fn fk(&self, x: Vec<f64>, ee_offset: Option<Vec<Vec<f64>>>) -> Vec<Vec<f64>> {
         let robot = &self.0;
 
         assert_eq!(x.len(), robot.num_positions(), "len(x0) != num_positions");
@@ -145,23 +143,7 @@ impl PyRobot {
     }
 
     #[pyo3(signature=(x, ee_offset=None))]
-    fn fk_pq2hom(&self, x: Vec<f64>, ee_offset: Option<Vec<f64>>) -> Vec<Vec<f64>> {
-        // Evaluate forward kinematics. ee_offset and return type are
-        //   homogeneous transform matrix [4x4].
-        let robot = &self.0;
-
-        assert_eq!(x.len(), robot.num_positions(), "len(x0) != num_positions");
-
-        let ee_pose = robot.fk(&x, &pose_to_isometry(ee_offset)).ee_tfm();
-        ee_pose
-            .to_matrix()
-            .row_iter()
-            .map(|row| row.iter().copied().collect())
-            .collect()
-    }
-
-    #[pyo3(signature=(x, ee_offset=None))]
-    fn fk_pq2pq(&self, x: Vec<f64>, ee_offset: Option<Vec<f64>>) -> Vec<f64> {
+    fn fk_medra(&self, x: Vec<f64>, ee_offset: Option<Vec<f64>>) -> Vec<f64> {
         // Evaluate forward kinematics. ee_offset and return type are
         //   pose + quaternion vector [px, py, pz, qw, qx, qy, qz].
         let robot = &self.0;
