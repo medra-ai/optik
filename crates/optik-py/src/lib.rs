@@ -3,7 +3,8 @@
 use optik::{Robot, SolverConfig};
 
 use nalgebra::{
-    Isometry3, Matrix3, Matrix4, Quaternion, Rotation3, Translation3, UnitQuaternion, UnitVector3, Vector3
+    Isometry3, Matrix3, Matrix4, Quaternion, Rotation3, Translation3, UnitQuaternion, UnitVector3,
+    Vector3,
 };
 use pyo3::prelude::*;
 
@@ -15,10 +16,11 @@ fn parse_pose(v: Option<Vec<Vec<f64>>>) -> Isometry3<f64> {
             Some(isometry) => return isometry,
             None => {
                 // normalize the rotation part of the matrix
-                let translation_vec: Vector3<f64> = matrix.fixed_view::<3,1>(0, 3).into();
+                let translation_vec: Vector3<f64> = matrix.fixed_view::<3, 1>(0, 3).into();
                 let translation: Translation3<f64> = Translation3::from(translation_vec);
-                let rotation_matrix: Matrix3<f64> = matrix.fixed_view::<3,3>(0,0).into();
-                let mut rotation: Rotation3<f64> = Rotation3::from_matrix_unchecked(rotation_matrix);
+                let rotation_matrix: Matrix3<f64> = matrix.fixed_view::<3, 3>(0, 0).into();
+                let mut rotation: Rotation3<f64> =
+                    Rotation3::from_matrix_unchecked(rotation_matrix);
                 rotation.renormalize();
                 return Isometry3::from_parts(translation, rotation.into());
             }
