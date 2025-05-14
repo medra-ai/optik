@@ -7,7 +7,9 @@ use std::{
     time::Instant,
 };
 
-use nalgebra::{DVectorView, Isometry3, Matrix6xX, Vector3, UnitQuaternion, Translation3, UnitVector3};
+use nalgebra::{
+    DVectorView, Isometry3, Matrix6xX, Translation3, UnitQuaternion, UnitVector3, Vector3,
+};
 use nlopt::{Algorithm, Nlopt, SuccessState, Target};
 use ordered_float::OrderedFloat;
 use rand::{Rng, SeedableRng};
@@ -33,7 +35,6 @@ pub struct Robot {
 
 impl Robot {
     pub fn new(chain: KinematicChain) -> Self {
-
         Self {
             chain,
             thread_pool: ThreadPoolBuilder::default().build().unwrap(),
@@ -283,7 +284,7 @@ impl Robot {
             let joint_angle = seed_joint_angles[index];
             if joint_angle < joint_limits.0[index] {
                 seed_joint_angles[index] = joint_limits.0[index]
-            } else if joint_angle > joint_limits.1[index]{
+            } else if joint_angle > joint_limits.1[index] {
                 seed_joint_angles[index] = joint_limits.1[index]
             }
         }
@@ -298,17 +299,21 @@ impl Robot {
         // Project the source vector into the valid cone
         const RNG_SEED: u64 = 42;
         let mut rng = ChaCha8Rng::seed_from_u64(RNG_SEED);
-        let angle_of_rotation = rng.gen_range(angle_between_vectors-max_angle..angle_between_vectors);
+        let angle_of_rotation =
+            rng.gen_range(angle_between_vectors - max_angle..angle_between_vectors);
         let rotation_onto_cone: Isometry3<f64> = Isometry3::from_parts(
-            Translation3::new(0.,0.,0.), 
-            UnitQuaternion::from_axis_angle(&UnitVector3::new_normalize(axis_of_rotation), angle_of_rotation)
+            Translation3::new(0., 0., 0.),
+            UnitQuaternion::from_axis_angle(
+                &UnitVector3::new_normalize(axis_of_rotation),
+                angle_of_rotation,
+            ),
         );
         let target_pose = rotation_onto_cone * robot_pose;
         // run ik to find joint angles that match the projected pose
         let ik_solution = self.ik(&config, &target_pose, seed_joint_angles, &ee_transform);
         match ik_solution {
             Some(ik_solution) => return Some(ik_solution.0),
-            None => return None
+            None => return None,
         };
     }
 }
