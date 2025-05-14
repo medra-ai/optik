@@ -3,25 +3,24 @@
 use optik::{Robot, SolverConfig};
 
 use nalgebra::{
-    Isometry3, Matrix3, Matrix4, Quaternion, Translation3, UnitQuaternion, UnitVector3, Vector3,
+    Isometry3, Matrix3, Matrix4, Quaternion, Rotation3, Translation3, UnitQuaternion, UnitVector3, Vector3
 };
 use pyo3::prelude::*;
 
 fn parse_pose(v: Option<Vec<Vec<f64>>>) -> Isometry3<f64> {
     if let Some(v) = v {
-        let mut matrix = Matrix4::from_iterator(v.into_iter().flatten()).transpose();
+        let matrix = Matrix4::from_iterator(v.into_iter().flatten()).transpose();
         let isometry_opt: Option<Isometry3<f64>> = nalgebra::try_convert(matrix);
         match isometry_opt {
             Some(isometry) => return isometry,
             None => {
-                // Use singular value decomposition to normalize the rotation part of the matrix
-                let rotatrion_matrix: Matrix3<f64> = matrix.fixed_view::<3, 3>(0, 0).into();
-                let svd = rotatrion_matrix.svd(true, true);
-                let normalized_rotation_matrix = svd.u.unwrap() * svd.v_t.unwrap();
-                matrix
-                    .fixed_view_mut::<3, 3>(0, 0)
-                    .copy_from(&normalized_rotation_matrix);
-                return nalgebra::try_convert(matrix).expect("invalid target transform specified");
+                // normalize the rotation part of the matrix
+                let translation_vec: Vector3<f64> = matrix.fixed_view::<3,1>(0, 3).into();
+                let translation: Translation3<f64> = Translation3::from(translation_vec);
+                let rotation_matrix: Matrix3<f64> = matrix.fixed_view::<3,3>(0,0).into();
+                let mut rotation: Rotation3<f64> = Rotation3::from_matrix_unchecked(rotation_matrix);
+                rotation.renormalize();
+                return Isometry3::from_parts(translation, rotation.into());
             }
         }
     } else {
