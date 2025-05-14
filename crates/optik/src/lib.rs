@@ -278,7 +278,7 @@ impl Robot {
         mut seed_joint_angles: Vec<f64>,
         config: &SolverConfig,
     ) -> Option<Vec<f64>> {
-        // apply joint limits
+        // apply joint limits to seed joint angles
         let joint_limits = self.joint_limits();
         for index in 0..seed_joint_angles.len() {
             let joint_angle = seed_joint_angles[index];
