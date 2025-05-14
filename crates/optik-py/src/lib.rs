@@ -224,42 +224,13 @@ impl PyRobot {
         target_vec: Vec<f64>,
         max_angle: f64,
         ee_offset_pose: Vec<f64>,
-        mut seed_joint_angles: Vec<f64>,
+        seed_joint_angles: Vec<f64>,
         config: &PySolverConfig,
     ) -> Option<Vec<f64>> {
-        // apply joint limits
-        let joint_limits = self.0.joint_limits();
-        for index in 0..seed_joint_angles.len() {
-            let joint_angle = seed_joint_angles[index];
-            if joint_angle < joint_limits.0[index] {
-                seed_joint_angles[index] = joint_limits.0[index]
-            } else if joint_angle > joint_limits.1[index]{
-                seed_joint_angles[index] = joint_limits.1[index]
-            }
-        }
-        // calculate axis and angle of rotation
-        let ee_transform: Isometry3<f64> = pose_to_isometry(Some(ee_offset_pose));
-        let robot_pose: Isometry3<f64> = self.0.fk(&seed_joint_angles, &ee_transform).ee_tfm();
         let source_vector_tip_frame: UnitVector3<f64> = UnitVector3::new_normalize(Vector3::from_column_slice(&source_vec_in_tip_frame));
-        let source_vector = robot_pose.transform_vector(&source_vector_tip_frame);
         let target_vector: UnitVector3<f64> = UnitVector3::new_normalize(Vector3::from_column_slice(&target_vec));
-        let axis_of_rotation: Vector3<f64> = source_vector.cross(&target_vector);
-        let angle_between_vectors: f64 = source_vector.dot(&target_vector).acos();
-        if angle_between_vectors < max_angle {
-            return Some(seed_joint_angles);
-        };
-        // Project the source vector into the valid cone
-        let rotation_onto_cone: Isometry3<f64> = Isometry3::from_parts(
-            Translation3::new(0.,0.,0.), 
-            UnitQuaternion::from_axis_angle(&UnitVector3::new_normalize(axis_of_rotation), angle_between_vectors-max_angle)
-        );
-        let target_pose = rotation_onto_cone * robot_pose;
-        // run ik to find joint angles that match the projected pose
-        let ik_solution = self.0.ik(&config.0, &target_pose, seed_joint_angles, &ee_transform);
-        match ik_solution {
-            Some(ik_solution) => return Some(ik_solution.0),
-            None => return None
-        };
+        let ee_transform: Isometry3<f64> = pose_to_isometry(Some(ee_offset_pose));
+        return self.0.apply_angle_between_two_vectors_constraint(source_vector_tip_frame, target_vector, max_angle, ee_transform, seed_joint_angles, &config.0);
     }
 }
 
