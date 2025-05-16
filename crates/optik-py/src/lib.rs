@@ -203,7 +203,7 @@ impl PyRobot {
     }
 
     #[pyo3(signature=(seed))]
-    fn initalize_rng(&mut self, seed: u64){
+    fn initalize_rng(&mut self, seed: u64) {
         self.0.initialize_rng(seed);
     }
 

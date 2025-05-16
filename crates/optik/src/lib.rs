@@ -271,7 +271,7 @@ impl Robot {
         })
     }
 
-    pub fn initialize_rng(&mut self, seed: u64){
+    pub fn initialize_rng(&mut self, seed: u64) {
         self.rng = ChaCha8Rng::seed_from_u64(seed);
     }
 
@@ -303,8 +303,9 @@ impl Robot {
             return Some(seed_joint_angles);
         };
         // Project the source vector into the valid cone
-        let angle_of_rotation =
-            self.rng.gen_range(angle_between_vectors - max_angle..angle_between_vectors);
+        let angle_of_rotation = self
+            .rng
+            .gen_range(angle_between_vectors - max_angle..angle_between_vectors);
         let rotation_onto_cone: Isometry3<f64> = Isometry3::from_parts(
             Translation3::new(0., 0., 0.),
             UnitQuaternion::from_axis_angle(
