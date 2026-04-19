@@ -226,6 +226,39 @@ impl PyRobot {
             &config.0,
         );
     }
+
+    /// Gauss-Newton projector for the angle-between-two-vectors cone.
+    ///
+    /// Continuous in the seed state (unlike
+    /// `apply_angle_between_two_vectors_constraint` which can flip IK
+    /// branches), so it is the correct projector for OMPL's
+    /// `ProjectedStateSpace::discreteGeodesic` edge-checking.
+    #[pyo3(signature=(source_vec_in_tip_frame, target_vec, max_angle, ee_offset_pose, seed_joint_angles, max_iters=50, tol=1e-3))]
+    fn apply_angle_between_two_vectors_constraint_newton(
+        &self,
+        source_vec_in_tip_frame: Vec<f64>,
+        target_vec: Vec<f64>,
+        max_angle: f64,
+        ee_offset_pose: Vec<f64>,
+        seed_joint_angles: Vec<f64>,
+        max_iters: usize,
+        tol: f64,
+    ) -> Option<Vec<f64>> {
+        let source_vector_tip_frame: UnitVector3<f64> =
+            UnitVector3::new_normalize(Vector3::from_column_slice(&source_vec_in_tip_frame));
+        let target_vector: UnitVector3<f64> =
+            UnitVector3::new_normalize(Vector3::from_column_slice(&target_vec));
+        let ee_transform: Isometry3<f64> = pose_to_isometry(Some(ee_offset_pose));
+        self.0.apply_angle_between_two_vectors_constraint_newton(
+            source_vector_tip_frame,
+            target_vector,
+            max_angle,
+            ee_transform,
+            seed_joint_angles,
+            max_iters,
+            tol,
+        )
+    }
 }
 
 #[pymodule()]

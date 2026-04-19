@@ -269,6 +269,119 @@ impl Robot {
         })
     }
 
+    /// Project a joint configuration onto the angle-between-two-vectors
+    /// cone using Gauss-Newton iteration on the scalar constraint
+    /// `f(q) = angle(q) - max_angle`.
+    ///
+    /// Unlike `apply_angle_between_two_vectors_constraint` (which runs a
+    /// full IK solve to find any joint config satisfying the inequality),
+    /// this projector is *continuous in the seed state*. It is the
+    /// appropriate projector to use with OMPL's
+    /// `ProjectedStateSpace::discreteGeodesic` where consecutive
+    /// projected samples must stay close for `checkMotion` to accept
+    /// an edge.
+    ///
+    /// Behaviour:
+    /// - If the seed already satisfies the constraint (angle <= max_angle
+    ///   + tol), it is returned unchanged.
+    /// - Otherwise Newton steps along the analytical gradient of the
+    ///   tip-axis angle w.r.t. joints, clamped to joint limits at each
+    ///   step. Returns `None` if the iteration does not converge or the
+    ///   gradient becomes singular.
+    pub fn apply_angle_between_two_vectors_constraint_newton(
+        &self,
+        source_vector_tip_frame: UnitVector3<f64>,
+        target_vector: UnitVector3<f64>,
+        max_angle: f64,
+        ee_transform: Isometry3<f64>,
+        mut q: Vec<f64>,
+        max_iters: usize,
+        tol: f64,
+    ) -> Option<Vec<f64>> {
+        const SIN_ANGLE_MIN: f64 = 1e-6;
+        const MIN_GRAD_NORM_SQ: f64 = 1e-12;
+        const FD_EPS: f64 = 1e-5;
+
+        let (lb, ub) = self.joint_limits();
+        let n = q.len();
+        for i in 0..n {
+            q[i] = q[i].clamp(lb[i], ub[i]);
+        }
+
+        // Compute angle(q) and the world-frame tip axis.
+        let eval = |q: &[f64]| -> (f64, Vector3<f64>) {
+            let fk = self.chain.forward_kinematics(q, &ee_transform);
+            let a = fk.ee_tfm().transform_vector(&source_vector_tip_frame);
+            let dot = a.dot(&target_vector).clamp(-1.0, 1.0);
+            (dot.acos(), a)
+        };
+
+        for _iter in 0..max_iters {
+            let (angle, a) = eval(&q);
+            let f = angle - max_angle;
+            if f <= tol {
+                return Some(q);
+            }
+
+            // Analytical gradient:
+            //   d(angle)/dq = -(1 / sin(angle)) * J_w^T (a x b)
+            // where J_w is the world-frame angular Jacobian at the tip.
+            // The joint_jacobian() is expressed in the local ee frame,
+            // so rotate the world-frame (a x b) vector into the ee
+            // frame before dotting with the angular rows.
+            let sin_a = angle.sin();
+            let mut grad = vec![0.0; n];
+
+            if sin_a.abs() < SIN_ANGLE_MIN {
+                // Numerically unstable (tip parallel/antiparallel with
+                // target). Fall back to one-sided finite differences.
+                for i in 0..n {
+                    let mut qp = q.clone();
+                    qp[i] = (qp[i] + FD_EPS).clamp(lb[i], ub[i]);
+                    let (angle_p, _) = eval(&qp);
+                    grad[i] = (angle_p - angle) / FD_EPS;
+                }
+            } else {
+                let fk = self.chain.forward_kinematics(&q, &ee_transform);
+                let jac_local = self.chain.joint_jacobian(&fk);
+                let r_we = fk.ee_tfm().rotation;
+                let cross_world: Vector3<f64> = a.cross(&target_vector);
+                let cross_local: Vector3<f64> =
+                    r_we.inverse_transform_vector(&cross_world);
+                let inv_sin = 1.0 / sin_a;
+                for i in 0..n {
+                    // angular rows are indices 3..6 in the 6xN jacobian.
+                    let ax = jac_local[(3, i)];
+                    let ay = jac_local[(4, i)];
+                    let az = jac_local[(5, i)];
+                    let d_cos = ax * cross_local[0]
+                        + ay * cross_local[1]
+                        + az * cross_local[2];
+                    // d(angle)/dq_i = -(1/sin(angle)) * d(cos)/dq_i
+                    grad[i] = -inv_sin * d_cos;
+                }
+            }
+
+            let grad_norm_sq: f64 = grad.iter().map(|x| x * x).sum();
+            if grad_norm_sq < MIN_GRAD_NORM_SQ {
+                // Singular direction; Newton cannot make progress.
+                return None;
+            }
+            let step = f / grad_norm_sq;
+            for i in 0..n {
+                q[i] = (q[i] - step * grad[i]).clamp(lb[i], ub[i]);
+            }
+        }
+
+        // Final check after max_iters.
+        let (angle, _) = eval(&q);
+        if (angle - max_angle) <= tol {
+            Some(q)
+        } else {
+            None
+        }
+    }
+
     pub fn apply_angle_between_two_vectors_constraint(
         &self,
         source_vector_tip_frame: UnitVector3<f64>,
