@@ -346,17 +346,14 @@ impl Robot {
                 let jac_local = self.chain.joint_jacobian(&fk);
                 let r_we = fk.ee_tfm().rotation;
                 let cross_world: Vector3<f64> = a.cross(&target_vector);
-                let cross_local: Vector3<f64> =
-                    r_we.inverse_transform_vector(&cross_world);
+                let cross_local: Vector3<f64> = r_we.inverse_transform_vector(&cross_world);
                 let inv_sin = 1.0 / sin_a;
                 for i in 0..n {
                     // angular rows are indices 3..6 in the 6xN jacobian.
                     let ax = jac_local[(3, i)];
                     let ay = jac_local[(4, i)];
                     let az = jac_local[(5, i)];
-                    let d_cos = ax * cross_local[0]
-                        + ay * cross_local[1]
-                        + az * cross_local[2];
+                    let d_cos = ax * cross_local[0] + ay * cross_local[1] + az * cross_local[2];
                     // d(angle)/dq_i = -(1/sin(angle)) * d(cos)/dq_i
                     grad[i] = -inv_sin * d_cos;
                 }
