@@ -130,6 +130,34 @@ impl PyRobot {
     }
 
     #[pyo3(signature=(x, ee_offset=None))]
+    fn joint_jacobian_medra(
+        &self,
+        x: Vec<f64>,
+        ee_offset: Option<Vec<f64>>,
+    ) -> Vec<Vec<f64>> {
+        // Like joint_jacobian, but:
+        //   - ee_offset uses flat [px, py, pz, qw, qx, qy, qz] format
+        //   - Returns the world-frame Jacobian: R_WE @ J_local for both
+        //     the linear (rows 0-2) and angular (rows 3-5) parts.
+        let robot = &self.0;
+
+        assert_eq!(x.len(), robot.num_positions(), "len(x0) != num_positions");
+
+        let fk = robot.fk(&x, &pose_to_isometry(ee_offset));
+        let jac = robot.joint_jacobian(&fk);
+
+        let r_we = fk.ee_tfm().rotation.to_rotation_matrix();
+        let linear_world = r_we.matrix() * jac.fixed_rows::<3>(0);
+        let angular_world = r_we.matrix() * jac.fixed_rows::<3>(3);
+
+        linear_world
+            .row_iter()
+            .chain(angular_world.row_iter())
+            .map(|row| row.iter().copied().collect())
+            .collect()
+    }
+
+    #[pyo3(signature=(x, ee_offset=None))]
     fn fk(&self, x: Vec<f64>, ee_offset: Option<Vec<Vec<f64>>>) -> Vec<Vec<f64>> {
         let robot = &self.0;
 
