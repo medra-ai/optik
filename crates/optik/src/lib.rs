@@ -303,10 +303,8 @@ impl Robot {
             &UnitVector3::new_normalize(axis_of_rotation),
             angle_of_rotation,
         );
-        // The constraint is on the tool's direction, which only the rotation
-        // part affects. Pivot about the tip so the tool stays put: composing a
-        // zero-translation isometry on the left would instead swing the tip
-        // around the base, handing IK a pose the constraint never asked for.
+        // Rotate about the tip to constrain the tool's orientation and keep
+        // its position static
         let target_pose = Isometry3::from_parts(
             robot_pose.translation,
             rotation_onto_cone * robot_pose.rotation,
