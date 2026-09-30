@@ -7,9 +7,7 @@ use std::{
     time::Instant,
 };
 
-use nalgebra::{
-    DVectorView, Isometry3, Matrix6xX, Translation3, UnitQuaternion, UnitVector3, Vector3,
-};
+use nalgebra::{DVectorView, Isometry3, Matrix6xX, UnitQuaternion, UnitVector3, Vector3};
 use nlopt::{Algorithm, Nlopt, SuccessState, Target};
 use ordered_float::OrderedFloat;
 use rand::{Rng, SeedableRng};
@@ -301,14 +299,16 @@ impl Robot {
         let mut rng = ChaCha8Rng::seed_from_u64(RNG_SEED);
         let angle_of_rotation =
             rng.gen_range(angle_between_vectors - max_angle..angle_between_vectors);
-        let rotation_onto_cone: Isometry3<f64> = Isometry3::from_parts(
-            Translation3::new(0., 0., 0.),
-            UnitQuaternion::from_axis_angle(
-                &UnitVector3::new_normalize(axis_of_rotation),
-                angle_of_rotation,
-            ),
+        let rotation_onto_cone = UnitQuaternion::from_axis_angle(
+            &UnitVector3::new_normalize(axis_of_rotation),
+            angle_of_rotation,
         );
-        let target_pose = rotation_onto_cone * robot_pose;
+        // Rotate about the tip to constrain the tool's orientation and keep
+        // its position static
+        let target_pose = Isometry3::from_parts(
+            robot_pose.translation,
+            rotation_onto_cone * robot_pose.rotation,
+        );
         // run ik to find joint angles that match the projected pose
         let ik_solution = self.ik(&config, &target_pose, seed_joint_angles, &ee_transform);
         match ik_solution {
