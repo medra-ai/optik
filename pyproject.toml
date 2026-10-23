@@ -1,5 +1,6 @@
 [project]
 name = "optik-py"
+dynamic = ["version"]
 description = "An optimizing IK solver based on the Lie group of rigid transforms SE(3)"
 readme = "README.md"
 requires-python = ">=3.8"

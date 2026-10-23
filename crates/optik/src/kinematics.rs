@@ -60,21 +60,21 @@ impl KinematicChain {
         // original:   (revolute A -> fixed B -> fixed C -> revolute D)
         // simplified: (revolute A -> revolute D')
         //
-        // where D' = D * C * B
+        // where origin(D') = B * C * origin(D)
         let (mut joints, tip_link_tfm) = joints.fold(
             (vec![], Isometry3::identity()),
             |(mut joints, collapsed_tfm), joint| {
                 match joint.typ {
                     JointType::Fixed => {
                         // Accumulate the transforms from successive fixed joints.
-                        (joints, joint.origin * collapsed_tfm)
+                        (joints, collapsed_tfm * joint.origin)
                     }
                     _ => {
                         // When we encounter an articulated joint, apply the
                         // accumulated fixed joint transforms (if any) and then
                         // reset the accumulation.
                         let new_joint = Joint {
-                            origin: joint.origin * collapsed_tfm,
+                            origin: collapsed_tfm * joint.origin,
                             ..joint
                         };
                         joints.push(new_joint);

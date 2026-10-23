@@ -1,6 +1,6 @@
 use approx::assert_abs_diff_eq;
-use nalgebra::Isometry3;
-use optik::Robot;
+use nalgebra::{Isometry3, Translation3, UnitQuaternion, Vector3};
+use optik::{Robot, SolutionMode, SolverConfig};
 
 const TEST_MODEL_STR: &str = include_str!("data/ur3e.urdf");
 
@@ -23,4 +23,118 @@ fn test_fk() {
             epsilon = 1e-6
         );
     }
+}
+
+#[test]
+fn fixed_root_precedes_articulated_origin() {
+    let robot = Robot::from_urdf_str(include_str!("data/fixed_origin_order.urdf"), "world", "tip");
+    let mount = Isometry3::from_parts(
+        Translation3::identity(),
+        UnitQuaternion::from_euler_angles(std::f64::consts::FRAC_PI_2, 0.0, 0.0),
+    );
+    let origin = Isometry3::from_parts(
+        Translation3::identity(),
+        UnitQuaternion::from_euler_angles(0.0, 0.0, std::f64::consts::FRAC_PI_2),
+    );
+
+    for angle in [-0.7, 0.0, 0.4] {
+        let motion = Isometry3::from_parts(
+            Translation3::identity(),
+            UnitQuaternion::from_euler_angles(0.0, 0.0, angle),
+        );
+        let expected = mount * origin * motion * Isometry3::translation(0.1, 0.0, 0.0);
+
+        assert_abs_diff_eq!(
+            robot.fk(&[angle], &Isometry3::identity()).ee_tfm(),
+            expected,
+            epsilon = 1e-12
+        );
+    }
+}
+
+#[test]
+fn ik_reaches_independent_target_with_fixed_root_and_articulated_origin() {
+    let robot = Robot::from_urdf_str(include_str!("data/fixed_origin_order.urdf"), "world", "tip");
+    let angle = 0.4_f64;
+    let target = Isometry3::from_parts(
+        Translation3::new(-0.1 * angle.sin(), 0.0, 0.1 * angle.cos()),
+        UnitQuaternion::from_axis_angle(&Vector3::x_axis(), std::f64::consts::FRAC_PI_2)
+            * UnitQuaternion::from_axis_angle(
+                &Vector3::z_axis(),
+                std::f64::consts::FRAC_PI_2 + angle,
+            ),
+    );
+    let config = SolverConfig {
+        solution_mode: SolutionMode::Speed,
+        tol_f: 1e-16,
+        max_time: 0.0,
+        max_restarts: 1,
+        ..Default::default()
+    };
+
+    let (solution, _) = robot
+        .ik(&config, &target, vec![0.2], &Isometry3::identity())
+        .expect("the independently constructed target is reachable");
+
+    assert_abs_diff_eq!(solution[0], angle, epsilon = 1e-6);
+}
+
+#[test]
+fn consecutive_fixed_joints_preserve_order_before_articulated_joint() {
+    let robot = Robot::from_urdf_str(
+        r#"<robot name="fixed_middle">
+          <link name="base"/><link name="a"/><link name="b"/><link name="c"/><link name="tip"/>
+          <joint name="j1" type="revolute">
+            <parent link="base"/><child link="a"/><axis xyz="0 0 1"/>
+            <limit lower="-3" upper="3" effort="1" velocity="1"/>
+          </joint>
+          <joint name="turn" type="fixed">
+            <parent link="a"/><child link="b"/>
+            <origin rpy="1.5707963267948966 0 0"/>
+          </joint>
+          <joint name="shift" type="fixed">
+            <parent link="b"/><child link="c"/><origin xyz="0 0.2 0"/>
+          </joint>
+          <joint name="j2" type="revolute">
+            <parent link="c"/><child link="tip"/><axis xyz="0 0 1"/>
+            <limit lower="-3" upper="3" effort="1" velocity="1"/>
+          </joint>
+        </robot>"#,
+        "base",
+        "tip",
+    );
+    let turn = UnitQuaternion::from_euler_angles(std::f64::consts::FRAC_PI_2, 0.0, 0.0);
+    let expected = Isometry3::from_parts(Translation3::new(0.0, 0.0, 0.2), turn);
+
+    let actual = robot.fk(&[0.0, 0.0], &Isometry3::identity()).ee_tfm();
+
+    assert_abs_diff_eq!(actual, expected, epsilon = 1e-12);
+}
+
+#[test]
+fn consecutive_terminal_fixed_joints_preserve_order() {
+    let robot = Robot::from_urdf_str(
+        r#"<robot name="fixed_tip">
+          <link name="base"/><link name="moving"/><link name="turned"/><link name="tip"/>
+          <joint name="j1" type="revolute">
+            <parent link="base"/><child link="moving"/><axis xyz="0 0 1"/>
+            <limit lower="-3" upper="3" effort="1" velocity="1"/>
+          </joint>
+          <joint name="turn" type="fixed">
+            <parent link="moving"/><child link="turned"/>
+            <origin rpy="0 0 1.5707963267948966"/>
+          </joint>
+          <joint name="shift" type="fixed">
+            <parent link="turned"/><child link="tip"/><origin xyz="0.1 0 0"/>
+          </joint>
+        </robot>"#,
+        "base",
+        "tip",
+    );
+    let turn = UnitQuaternion::from_euler_angles(0.0, 0.0, std::f64::consts::FRAC_PI_2);
+    let expected = Isometry3::from_parts(Translation3::new(0.0, 0.1, 0.0), turn);
+
+    let actual = robot.fk(&[0.0], &Isometry3::identity()).ee_tfm();
+
+    assert_abs_diff_eq!(actual, expected, epsilon = 1e-12);
 }
